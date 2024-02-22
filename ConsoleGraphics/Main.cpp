@@ -7,23 +7,22 @@
 
 #include <iostream>
 #include <vector>
-#include <memory>
+#include <thread>
 #include <stdexcept>
 
 class Graphics
 {
 	public:
-	Graphics() : m_chBuffer(nullptr), m_rect{}
+	Graphics() 
+		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_chBuffer(nullptr), m_rect{}
 	{
-		m_nScreenWidth = 80;
-		m_nScreenHeight = 30;
-
-		m_hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		m_sAppTitle  = L"Default";
+		m_hConsole   = GetStdHandle(STD_OUTPUT_HANDLE);
 		m_hConsoleIn = GetStdHandle(STD_INPUT_HANDLE);
-		m_sAppTitle = L"Default";
+		m_bError     = false;
 	}
 
-	~Graphics()
+	~Graphics() 
 	{
 		delete[] m_chBuffer;
 	}
@@ -33,21 +32,24 @@ class Graphics
 		if (m_hConsole == INVALID_HANDLE_VALUE || m_hConsoleIn == INVALID_HANDLE_VALUE)
 			return error(L"INVALID HANDLE");
 
-		m_nScreenWidth = nWidth;
+		m_nScreenWidth  = nWidth;
 		m_nScreenHeight = nHeight;
 
-		COORD coord = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
-		if (!SetConsoleScreenBufferSize(m_hConsole, coord))
+		//m_rect = { 0, 0, 1, 1 };
+		//SetConsoleWindowInfo(m_hConsole, TRUE, &m_rect);
+
+		COORD const bufferSize = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
+		if (!SetConsoleScreenBufferSize(m_hConsole, bufferSize))
 			return error(L"FAILED TO SET CONSOLE SIZE");
 
 		if (!SetConsoleActiveScreenBuffer(m_hConsole))
 			return error(L"FAILED TO SET CONSOLE");
 
 		CONSOLE_FONT_INFOEX cfiex{};
-		cfiex.cbSize = sizeof(CONSOLE_FONT_INFOEX);
-		cfiex.nFont = NULL;
-		cfiex.FontFamily = FF_DONTCARE;
-		cfiex.FontWeight = FW_NORMAL;
+		cfiex.cbSize       = sizeof(CONSOLE_FONT_INFOEX);
+		cfiex.nFont        = NULL;
+		cfiex.FontFamily   = FF_DONTCARE;
+		cfiex.FontWeight   = FW_NORMAL;
 		cfiex.dwFontSize.X = nFontWidth;
 		cfiex.dwFontSize.Y = nFontHeight;
 
@@ -65,7 +67,7 @@ class Graphics
 		if (m_nScreenHeight > csbi.dwMaximumWindowSize.Y)
 			return error(L"SPECIFIED SCREEN HEIGHT IS TOO LARGE");
 
-		m_rect = { 0, 0, static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
+		m_rect = { 0, 0, static_cast<short>(m_nScreenWidth - 1), static_cast<short>(m_nScreenHeight - 1) };
 		if (!SetConsoleWindowInfo(m_hConsole, TRUE, &m_rect))
 			return error(L"FAILED TO SET SCREEN SIZE");
 
@@ -83,7 +85,88 @@ class Graphics
 
 		return 1;
 	}
+	
+	int drawLine(int x0, int y0, int x1, int y1, wchar_t wch = 0x2588, short color = 0x000F)
+	{
+		if (x0 < 0 || x0 >= m_nScreenWidth || y0 < 0 || y0 >= m_nScreenHeight ||
+			x1 < 0 || x1 >= m_nScreenWidth || y1 < 0 || y1 >= m_nScreenHeight)
+		{
+			return error(L"COORD OUT OF BOUND");
+		}
 
+		int dx = abs(x1 - x0);
+		int dy = abs(y1 - y0);
+		int dirx = (x0 < x1) ? 1 : -1;
+		int diry = (y0 < y1) ? 1 : -1;
+		
+		// error term
+		int err = dx - dy;
+		int e2;
+
+		while (true)
+		{
+			setPixel(x0, y0, wch, color);
+
+			if (x0 == x1 && y0 == y1)
+				break;
+
+			e2 = 2 * err;
+			if (e2 > -dy)
+			{
+				err -= dy;
+				x0 += dirx;
+			}
+			if (e2 < dx)
+			{
+				err += dx;
+				y0 += diry;
+			}
+		}
+
+		return 1;
+	}
+
+	int writeString(int x, int y, const std::wstring& text, short color = 0x000F)
+	{
+		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
+		{
+			for (std::size_t i = 0; i < text.size(); i++)
+			{
+				m_chBuffer[y * m_nScreenWidth + x + i].Char.UnicodeChar = text[i];
+				m_chBuffer[y * m_nScreenWidth + x + i].Attributes = color;
+			}
+
+			return 1;
+		}
+
+		return error(L"OUT OF BOUND");
+	}
+
+	int refresh()
+	{
+		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
+		{
+			m_chBuffer[i].Char.UnicodeChar = L' ';
+			m_chBuffer[i].Attributes = NULL;
+		}
+
+		return 1;
+	}
+
+	int update()
+	{
+		COORD bufferSize  = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
+		COORD bufferCoord = { 0, 0 };
+		
+		if (!WriteConsoleOutput(m_hConsole, m_chBuffer, bufferSize, bufferCoord, &m_rect))
+			return error(L"FAILED TO UPDATE BUFFER");
+
+		return 1;
+	}
+
+	bool isError() const { return m_bError; }
+
+	private:
 	int setPixel(int x, int y, short wch = 0x2588, short color = 0x000F)
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
@@ -93,36 +176,12 @@ class Graphics
 			return 1;
 		}
 
-		return 0;
-	}
-	
-	int drawLine(int x1, int y1, int x2, int y2, wchar_t wch = 0x2588, short color = 0x000F)
-	{
-		
+		return error(L"OUT OF BOUND");
 	}
 
-	int refresh()
-	{
-
-	}
-
-	int update()
-	{
-		if (!WriteConsoleOutput(m_hConsole,
-								m_chBuffer,
-								{ static_cast<short>(m_nScreenWidth - 1), static_cast<short>(m_nScreenHeight - 1) },
-								{ 0, 0 },
-								&m_rect))
-			return error(L"FAILED TO DRAW");
-
-		return 1;
-	}
-
-	HANDLE handle() { return m_hConsole; }
-
-	private:
 	int error(const wchar_t* message)
 	{
+		m_bError = true;
 		wchar_t wchBuffer[256];
 		FormatMessage(
 			FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -149,6 +208,8 @@ class Graphics
 
 	CHAR_INFO* m_chBuffer;
 	SMALL_RECT m_rect;
+
+	bool m_bError;
 };
 
 int main()
@@ -157,11 +218,20 @@ int main()
 	program.setMode(80, 30);
 	program.setCaption(L"Test");
 
+	COORD start = { 0, 0 };
+	COORD end = { 80, 30 };
 	while (true)
 	{
-		program.drawLine(0, 0);
-	
+		if (program.isError())
+			break;
+
 		program.refresh();
+		program.drawLine(start.X, start.Y, end.X - 1, end.Y - 1);
+		program.drawLine(start.X, start.Y, end.X - 1, 0);
+		program.drawLine(end.X - 1, 0, end.X - 1, end.Y - 1);
+
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		program.update();
 	}
 
 	return 0;

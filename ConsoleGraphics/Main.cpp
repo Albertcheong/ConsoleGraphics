@@ -9,7 +9,7 @@
 #include <iostream>
 #include <vector>
 #include <thread>
-#include <stdexcept>
+#include <algorithm>
 
 class Graphics
 {
@@ -36,8 +36,8 @@ class Graphics
 		m_nScreenWidth  = nWidth;
 		m_nScreenHeight = nHeight;
 
-		//m_rect = { 0, 0, 1, 1 };
-		//SetConsoleWindowInfo(m_hConsole, TRUE, &m_rect);
+		m_rect = { 0, 0, 1, 1 };
+		SetConsoleWindowInfo(m_hConsole, TRUE, &m_rect);
 
 		COORD const bufferSize = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
 		if (!SetConsoleScreenBufferSize(m_hConsole, bufferSize))
@@ -122,7 +122,7 @@ class Graphics
 		return 1;
 	}
 
-	int drawRect(int x, int y, const RECT& rect, wchar_t wch = 0x2588, short color = 0x000F)
+	int drawRect(int x, int y, const RECT& rect, bool bFill = false, wchar_t wch = 0x2588, short color = 0x000F)
 	{
 		POINT topLeft     = { x, y };
 		POINT topRight    = { x + rect.right - rect.left, y };
@@ -134,14 +134,49 @@ class Graphics
 		drawLine(topLeft.x, topLeft.y, bottomLeft.x, bottomLeft.y, wch, color);
 		drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, wch, color);
 
+		if (bFill)
+		{
+			for (int row = topLeft.y + 1; row < bottomLeft.y; row++)
+			{
+				drawLine(topLeft.x, row, topRight.x, row, wch, color);
+			}
+		}
+
 		return 1;
 	}
 	
-	int drawTriangle(int x0, int y0, int x1, int y1, int x2, int y2, wchar_t wch = 0x2588, short color = 0x000F)
+	int drawTriangle(POINT& a, POINT& b, POINT& c, bool bFill = false, wchar_t wch = 0x2588, short color = 0x000F)
 	{
-		drawLine(x0, y0, x1, y1, wch, color);
-		drawLine(x1, y1, x2, y2, wch, color);
-		drawLine(x2, y2, x0, y0, wch, color);
+		drawLine(a.x, a.y, b.x, b.y, wch, color);
+		drawLine(b.x, b.y, c.x, c.y, wch, color);
+		drawLine(c.x, c.y, a.x, a.y, wch, color);
+
+		if (bFill)
+		{
+			std::vector<POINT> vertices = { a, b, c };
+			std::sort(vertices.begin(), vertices.end(), compare_y_axis);
+
+			int min_y_axis = vertices[0].y;
+			int max_y_axis = vertices[2].y;
+			
+			for (int y = min_y_axis + 1; y < max_y_axis; y++)
+			{
+				std::vector<int> intersections;
+				for (int i = 0; i < 3; i++)
+				{
+					POINT p1 = vertices[i];
+					POINT p2 = vertices[(i + 1) % 3];
+
+					if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y))
+					{
+						int x = p1.x + (y - p1.y) * (p2.x - p1.x) / (p2.y - p1.y);
+						intersections.push_back(x);
+					}
+				}
+				if (intersections.size() == 2)
+					drawLine(intersections[0], y, intersections[1], y, wch, color);
+			}
+		}
 
 		return 1;
 	}
@@ -163,6 +198,7 @@ class Graphics
 
 			return 1;
 		}
+		return error(L"OUT OF BOUND");
 	}
 
 	int refresh()
@@ -250,21 +286,34 @@ int main()
 	POINT direction = { 0, 1 };
 	RECT rect = { 0, 0, 5, 5 };
 
+	POINT vertices[3];
+	vertices[0] = { 0, 0 };
+	vertices[1] = { 0, 5 };
+	vertices[2] = { 5, 5 };
+
 	while (true)
 	{
+		// implement later event handler
 		if (program.isError())
 			break;
 
 		program.refresh();
+		// ==================== START ====================
 
-		program.drawRect(position.x, position.y, rect);
-		position.x += direction.x;
-		position.y += direction.y;
+		program.drawRect(position.x, position.y, rect, true);
+		//position.x += direction.x;
+		//position.y += direction.y;
 
-		program.drawTriangle(0, 0, 0, 5, 5, 5);
-	
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
-		program.update(); 
+		program.drawTriangle(vertices[0], vertices[1], vertices[2], true);
+		vertices[0].y += direction.y;
+		vertices[1].y += direction.y;
+		vertices[2].y += direction.y;
+		
+		// ===================== END =====================
+
+		// implement later proper frame managment
+		std::this_thread::sleep_for(std::chrono::milliseconds(500)); // for now suffice
+		program.update();
 	}
 
 	return 0;

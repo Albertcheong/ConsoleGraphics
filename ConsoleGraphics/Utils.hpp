@@ -7,3 +7,9 @@ type clamp(const type& value, const type& min, const type& max)
 	if (value > max) return max;
 	return value;
 }
+
+bool compare_y_axis(const POINT& a, const POINT& b)
+{
+	return a.y < b.y;
+}
+

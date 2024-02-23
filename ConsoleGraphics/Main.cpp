@@ -4,7 +4,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "Windows.h"
-#include "Vector2.hpp"
 #include "Utils.hpp"
 
 #include <iostream>
@@ -90,12 +89,6 @@ class Graphics
 	
 	int drawLine(int x0, int y0, int x1, int y1, wchar_t wch = 0x2588, short color = 0x000F)
 	{
-		if (x0 < 0 || x0 >= m_nScreenWidth || y0 < 0 || y0 >= m_nScreenHeight ||
-			x1 < 0 || x1 >= m_nScreenWidth || y1 < 0 || y1 >= m_nScreenHeight)
-		{
-			return error(L"COORD OUT OF BOUND");
-		}
-
 		int dx = abs(x1 - x0);
 		int dy = abs(y1 - y0);
 		int dirx = (x0 < x1) ? 1 : -1;
@@ -107,7 +100,8 @@ class Graphics
 
 		while (true)
 		{
-			setPixel(x0, y0, wch, color);
+			if (!draw(x0, y0, wch, color))
+				continue;
 
 			if (x0 == x1 && y0 == y1)
 				break;
@@ -128,17 +122,31 @@ class Graphics
 		return 1;
 	}
 
-	int drawRect()
+	int drawRect(int x, int y, const RECT& rect, wchar_t wch = 0x2588, short color = 0x000F)
 	{
+		POINT topLeft     = { x, y };
+		POINT topRight    = { x + rect.right - rect.left, y };
+		POINT bottomLeft  = { x, y + rect.bottom - rect.top };
+		POINT bottomRight = { x + rect.right - rect.left, y + rect.bottom - rect.top };
 
+		drawLine(topLeft.x, topLeft.y, topRight.x, topRight.y, wch, color);
+		drawLine(bottomLeft.x, bottomLeft.y, bottomRight.x, bottomRight.y, wch, color);
+		drawLine(topLeft.x, topLeft.y, bottomLeft.x, bottomLeft.y, wch, color);
+		drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, wch, color);
+
+		return 1;
+	}
+	
+	int drawTriangle(int x0, int y0, int x1, int y1, int x2, int y2, wchar_t wch = 0x2588, short color = 0x000F)
+	{
+		drawLine(x0, y0, x1, y1, wch, color);
+		drawLine(x1, y1, x2, y2, wch, color);
+		drawLine(x2, y2, x0, y0, wch, color);
+
+		return 1;
 	}
 
-	int drawTriangle()
-	{
-
-	}
-
-	int drawEllipse()
+	int drawCirlce()
 	{
 
 	}
@@ -155,8 +163,6 @@ class Graphics
 
 			return 1;
 		}
-
-		return error(L"OUT OF BOUND");
 	}
 
 	int refresh()
@@ -188,7 +194,7 @@ class Graphics
 	bool isError() const { return m_bError; }
 
 	private:
-	int setPixel(int x, int y, short wch = 0x2588, short color = 0x000F)
+	int draw(int x, int y, short wch = 0x2588, short color = 0x000F)
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
 		{
@@ -196,8 +202,7 @@ class Graphics
 			m_chBuffer[y * m_nScreenWidth + x].Attributes = color;
 			return 1;
 		}
-
-		return error(L"OUT OF BOUND");
+		return 0;
 	}
 
 	int error(const wchar_t* message)
@@ -241,8 +246,10 @@ int main()
 	program.setMode(80, 30);
 	program.setCaption(L"Test");
 
-	Vector2<int> position = { 0, 0 };
-	Vector2<int> direction = { 1 , 1 };
+	POINT position  = { 0, 0 };
+	POINT direction = { 0, 1 };
+	RECT rect = { 0, 0, 5, 5 };
+
 	while (true)
 	{
 		if (program.isError())
@@ -250,14 +257,14 @@ int main()
 
 		program.refresh();
 
-		program.drawLine(position.x, position.y, position.x, position.y);
-		position += direction;
+		program.drawRect(position.x, position.y, rect);
+		position.x += direction.x;
+		position.y += direction.y;
 
-		position.x = clamp(position.x, 0, program.width() - 1);
-		position.y = clamp(position.y, 0, program.height() - 1);
+		program.drawTriangle(0, 0, 0, 5, 5, 5);
 	
 		std::this_thread::sleep_for(std::chrono::milliseconds(500));
-		program.update();
+		program.update(); 
 	}
 
 	return 0;

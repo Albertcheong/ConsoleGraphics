@@ -1,11 +1,13 @@
 #pragma once
 #include <iostream>
 
-template <typename type>
 class Vector2
 {
 	public:
-	Vector2(type _x, type _y)
+	double x, y;
+
+	public:
+	Vector2(double _x, double _y)
 		: x(_x), y(_y) {}
 
 	Vector2()
@@ -44,7 +46,7 @@ class Vector2
 		return Vector2(x - other.x, y - other.y);
 	}
 
-	Vector2 operator*(type scalar) const
+	Vector2 operator*(double scalar) const
 	{
 		return Vector2(x * scalar, y * scalar);
 	}
@@ -63,14 +65,14 @@ class Vector2
 		return *this;
 	}
 
-	type magnitude() const
+	double magnitude() const
 	{
 		return sqrt(x * x + y * y);
 	}
 
 	Vector2 normalize() const
 	{
-		type mag = magnitude();
+		double mag = magnitude();
 		if (mag != 0)
 			return (*this) * (1 / mag);
 
@@ -79,7 +81,4 @@ class Vector2
 	}
 
 	~Vector2() {}
-
-	public:
-	type x, y;
 };

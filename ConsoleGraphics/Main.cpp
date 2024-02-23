@@ -3,7 +3,9 @@
 #endif
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include "Windows.h"
+#include "Vector2.hpp"
+#include "Utils.hpp"
 
 #include <iostream>
 #include <vector>
@@ -126,6 +128,21 @@ class Graphics
 		return 1;
 	}
 
+	int drawRect()
+	{
+
+	}
+
+	int drawTriangle()
+	{
+
+	}
+
+	int drawEllipse()
+	{
+
+	}
+
 	int writeString(int x, int y, const std::wstring& text, short color = 0x000F)
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
@@ -164,6 +181,10 @@ class Graphics
 		return 1;
 	}
 
+	int width() const { return m_nScreenWidth; }
+
+	int height() const { return m_nScreenHeight; }
+
 	bool isError() const { return m_bError; }
 
 	private:
@@ -195,6 +216,8 @@ class Graphics
 
 		std::wcerr << L"Error Message    : " << message << std::endl;
 		std::wcerr << L"Formatted Message: " << wchBuffer << std::endl;
+		std::wcerr << L"Press enter key to continue" << std::endl;
+		std::cin.ignore();
 		return 0;
 	}
 
@@ -218,19 +241,22 @@ int main()
 	program.setMode(80, 30);
 	program.setCaption(L"Test");
 
-	COORD start = { 0, 0 };
-	COORD end = { 80, 30 };
+	Vector2<int> position = { 0, 0 };
+	Vector2<int> direction = { 1 , 1 };
 	while (true)
 	{
 		if (program.isError())
 			break;
 
 		program.refresh();
-		program.drawLine(start.X, start.Y, end.X - 1, end.Y - 1);
-		program.drawLine(start.X, start.Y, end.X - 1, 0);
-		program.drawLine(end.X - 1, 0, end.X - 1, end.Y - 1);
 
-		std::this_thread::sleep_for(std::chrono::seconds(1));
+		program.drawLine(position.x, position.y, position.x, position.y);
+		position += direction;
+
+		position.x = clamp(position.x, 0, program.width() - 1);
+		position.y = clamp(position.y, 0, program.height() - 1);
+	
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		program.update();
 	}
 

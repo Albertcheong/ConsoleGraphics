@@ -15,7 +15,7 @@ class Graphics
 {
 	public:
 	Graphics() 
-		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_chBuffer(nullptr), m_rect{}
+		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_chBuffer(nullptr), m_chBufferBack(nullptr), m_rect{}
 	{
 		m_sAppTitle  = L"Default";
 		m_hConsole   = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -26,6 +26,7 @@ class Graphics
 	~Graphics() 
 	{
 		delete[] m_chBuffer;
+		delete[] m_chBufferBack;
 	}
 
 	int setMode(int nWidth, int nHeight, int nFontWidth = 8, int nFontHeight = 8)
@@ -74,6 +75,9 @@ class Graphics
 
 		m_chBuffer = new CHAR_INFO[m_nScreenWidth * m_nScreenHeight];
 		memset(m_chBuffer, NULL, sizeof(CHAR_INFO) * m_nScreenWidth * m_nScreenHeight);
+
+		m_chBufferBack = new CHAR_INFO[m_nScreenWidth * m_nScreenHeight];
+		memset(m_chBufferBack, NULL, sizeof(CHAR_INFO) * m_nScreenWidth * m_nScreenHeight);
 
 		return 1;
 	}
@@ -192,8 +196,8 @@ class Graphics
 		{
 			for (std::size_t i = 0; i < text.size(); i++)
 			{
-				m_chBuffer[y * m_nScreenWidth + x + i].Char.UnicodeChar = text[i];
-				m_chBuffer[y * m_nScreenWidth + x + i].Attributes = color;
+				m_chBufferBack[y * m_nScreenWidth + x + i].Char.UnicodeChar = text[i];
+				m_chBufferBack[y * m_nScreenWidth + x + i].Attributes = color;
 			}
 
 			return 1;
@@ -201,12 +205,18 @@ class Graphics
 		return error(L"OUT OF BOUND");
 	}
 
-	int refresh()
+	int refresh() // implement later better refresh
 	{
 		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
 		{
 			m_chBuffer[i].Char.UnicodeChar = L' ';
 			m_chBuffer[i].Attributes = NULL;
+		}
+
+		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
+		{
+			m_chBufferBack[i].Char.UnicodeChar = L' ';
+			m_chBufferBack[i].Attributes = NULL;
 		}
 
 		return 1;
@@ -216,6 +226,10 @@ class Graphics
 	{
 		COORD bufferSize  = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
 		COORD bufferCoord = { 0, 0 };
+
+		CHAR_INFO* temp = m_chBuffer;
+		m_chBuffer = m_chBufferBack;
+		m_chBufferBack = temp;
 		
 		if (!WriteConsoleOutput(m_hConsole, m_chBuffer, bufferSize, bufferCoord, &m_rect))
 			return error(L"FAILED TO UPDATE BUFFER");
@@ -234,8 +248,8 @@ class Graphics
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
 		{
-			m_chBuffer[y * m_nScreenWidth + x].Char.UnicodeChar = wch;
-			m_chBuffer[y * m_nScreenWidth + x].Attributes = color;
+			m_chBufferBack[y * m_nScreenWidth + x].Char.UnicodeChar = wch;
+			m_chBufferBack[y * m_nScreenWidth + x].Attributes = color;
 			return 1;
 		}
 		return 0;
@@ -265,15 +279,15 @@ class Graphics
 	private:
 	HANDLE m_hConsole;
 	HANDLE m_hConsoleIn;
+	SMALL_RECT m_rect;
 
+	bool m_bError;
 	int m_nScreenWidth;
 	int m_nScreenHeight;
 	std::wstring m_sAppTitle;
 
 	CHAR_INFO* m_chBuffer;
-	SMALL_RECT m_rect;
-
-	bool m_bError;
+	CHAR_INFO* m_chBufferBack;
 };
 
 int main()
@@ -293,11 +307,17 @@ int main()
 
 	while (true)
 	{
+		// ================ EVENT HANDLER ================
+		
 		// implement later event handler
 		if (program.isError())
 			break;
 
-		program.refresh();
+		// =============== DRAW BACKGROUND ===============
+
+		program.refresh(); // clear both buffers
+		// implement later background color
+
 		// ==================== START ====================
 
 		program.drawRect(position.x, position.y, rect, true);
@@ -312,7 +332,7 @@ int main()
 		// ===================== END =====================
 
 		// implement later proper frame managment
-		std::this_thread::sleep_for(std::chrono::milliseconds(500)); // for now suffice
+		std::this_thread::sleep_for(std::chrono::milliseconds(100)); // for now suffice
 		program.update();
 	}
 

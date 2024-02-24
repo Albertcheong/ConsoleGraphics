@@ -11,10 +11,10 @@
 #include <thread>
 #include <algorithm>
 
-class Graphics
+class Console2D
 {
 	public:
-	Graphics() 
+	Console2D() 
 		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_backgroundColor(NULL), m_chBufferFront{}, m_chBufferBack{}, m_rect{}
 	{
 		m_sAppTitle  = L"Default";
@@ -27,7 +27,7 @@ class Graphics
 		m_bError       = false;
 	}
 
-	~Graphics() {}
+	~Console2D() {}
 
 	int setMode(int nWidth, int nHeight, int nFontWidth = 8, int nFontHeight = 8)
 	{
@@ -101,7 +101,7 @@ class Graphics
 
 		while (true)
 		{
-			draw(x0, y0, wch, color);
+			drawPixel(x0, y0, wch, color);
 
 			if (x0 == x1 && y0 == y1)
 				break;
@@ -200,14 +200,14 @@ class Graphics
 			}
 			else
 			{
-				draw(center_x + x, center_y + y, wch, color);
-				draw(center_x + y, center_y + x, wch, color);
-				draw(center_x - y, center_y + x, wch, color);
-				draw(center_x - x, center_y + y, wch, color);
-				draw(center_x - x, center_y - y, wch, color);
-				draw(center_x - y, center_y - x, wch, color);
-				draw(center_x + y, center_y - x, wch, color);
-				draw(center_x + x, center_y - y, wch, color);
+				drawPixel(center_x + x, center_y + y, wch, color);
+				drawPixel(center_x + y, center_y + x, wch, color);
+				drawPixel(center_x - y, center_y + x, wch, color);
+				drawPixel(center_x - x, center_y + y, wch, color);
+				drawPixel(center_x - x, center_y - y, wch, color);
+				drawPixel(center_x - y, center_y - x, wch, color);
+				drawPixel(center_x + y, center_y - x, wch, color);
+				drawPixel(center_x + x, center_y - y, wch, color);
 			}
 
 			if (err <= 0)
@@ -317,8 +317,7 @@ class Graphics
 		return m_bError;
 	}
 
-	private:
-	int draw(int x, int y, short wch = 0x2588, short color = 0x000F)
+	int drawPixel(int x, int y, short wch = 0x2588, short color = 0x000F)
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
 		{
@@ -328,6 +327,7 @@ class Graphics
 		return 1;
 	}
 
+	private:
 	int error(const wchar_t* message)
 	{
 		m_bError = true;
@@ -371,20 +371,12 @@ class Graphics
 
 int main()
 {
-	Graphics program;
+	Console2D program;
 	program.setMode(80, 30);
 	program.setCaption(L"Test");
 
-	POINT position  = { 0, 1 };
-	POINT direction = { 0, 1 };
-	RECT rect = { 0, 0, 5, 5 };
-
-	POINT vertices[3];
-	vertices[0] = { 0, 1 };
-	vertices[1] = { 0, 6 };
-	vertices[2] = { 5, 6 };
-
-	//int radius = 0;
+	RECT rect = { 0, 0, program.width() - 1, program.height() - 1 };
+	int nLineHeight = 5;
 
 	while (true)
 	{
@@ -395,19 +387,15 @@ int main()
 			switch (wEvent)
 			{
 				case VK_RIGHT:
-					position.x++;
 					break;
 
 				case VK_LEFT:
-					position.x--;
 					break;
 
 				case VK_UP:
-					position.y--;
 					break;
 
 				case VK_DOWN:
-					position.y++;
 					break;
 
 				case VK_ESCAPE:
@@ -418,25 +406,19 @@ int main()
 		if (program.isError())
 			break;
 
-		// =============== DRAW BACKGROUND ===============
-
-		program.fillBackground(COLOR::BG_CYAN);
-
 		// ==================== START ====================
 
-		program.drawRect(position.x, position.y, rect, true);
+		for (int y = 0; y < program.height() - 1; y += 2)
+		{
+			int x = program.width() / 2 - 1;
+			program.drawPixel(x, y, 0x007C);
+		}
 
-		//program.drawTriangle(vertices[0], vertices[1], vertices[2], true);
-		//vertices[0].y += direction.y;
-		//vertices[1].y += direction.y;
-		//vertices[2].y += direction.y;
-
-		//program.drawCirlce(program.width() / 2, program.height() / 2, radius++, true, 0x2588, COLOR::FG_RED);
+		program.drawRect(0, 0, rect);
 		
 		// ===================== END =====================
 
-		// implement later proper frame managment
-		std::this_thread::sleep_for(std::chrono::milliseconds(100)); // for now suffice
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		program.update();
 	}
 

@@ -20,7 +20,11 @@ class Graphics
 		m_sAppTitle  = L"Default";
 		m_hConsole   = GetStdHandle(STD_OUTPUT_HANDLE);
 		m_hConsoleIn = GetStdHandle(STD_INPUT_HANDLE);
-		m_bError     = false;
+		m_mousePos_x = NULL;
+		m_mousePos_y = NULL;
+
+		m_bEnableSound = false;
+		m_bError       = false;
 	}
 
 	~Graphics() {}
@@ -238,6 +242,33 @@ class Graphics
 		return error(L"OUT OF BOUND");
 	}
 
+	std::vector<WORD> getEvent()
+	{
+		INPUT_RECORD input[128];
+		DWORD dwNumEventsRead = 0;
+		std::vector<WORD> keyCodes;
+
+		if (PeekConsoleInput(m_hConsoleIn, input, sizeof(input) / sizeof(INPUT_RECORD), &dwNumEventsRead))
+		{
+			if (dwNumEventsRead > 0)
+			{
+				if (ReadConsoleInput(m_hConsoleIn, input, sizeof(input) / sizeof(INPUT_RECORD), &dwNumEventsRead))
+				{
+					for (DWORD i = 0; i < dwNumEventsRead; ++i)
+					{
+						if (input[i].EventType == KEY_EVENT && input[i].Event.KeyEvent.bKeyDown)
+						{
+							WORD wkeyCode = input[i].Event.KeyEvent.wVirtualKeyCode;
+							keyCodes.push_back(wkeyCode);
+						}
+					}
+				}
+			}
+		}
+
+		return keyCodes;
+	}
+
 	int update()
 	{ 
 		/*
@@ -266,13 +297,25 @@ class Graphics
 		return 1;
 	}
 
-	int width() const { return m_nScreenWidth; }
+	int width() const 
+	{ 
+		return m_nScreenWidth; 
+	}
 
-	int height() const { return m_nScreenHeight; }
+	int height() const 
+	{ 
+		return m_nScreenHeight;
+	}
 
-	void fillBackground(short color) { m_backgroundColor = color; }
+	void fillBackground(short color)
+	{ 
+		m_backgroundColor = color;
+	}
 
-	bool isError() const { return m_bError; }
+	bool isError() const
+	{
+		return m_bError;
+	}
 
 	private:
 	int draw(int x, int y, short wch = 0x2588, short color = 0x000F)
@@ -315,8 +358,13 @@ class Graphics
 	std::vector<CHAR_INFO> m_chBufferBack;
 
 	bool m_bError;
+	bool m_bEnableSound;
+
 	int m_nScreenWidth;
 	int m_nScreenHeight;
+	int m_mousePos_x;
+	int m_mousePos_y;
+
 	std::wstring m_sAppTitle;
 	USHORT m_backgroundColor;
 };
@@ -336,13 +384,37 @@ int main()
 	vertices[1] = { 0, 6 };
 	vertices[2] = { 5, 6 };
 
-	int radius = 0;
+	//int radius = 0;
 
 	while (true)
 	{
 		// ================ EVENT HANDLER ================
 		
-		// implement later event handler
+		for (const auto& wEvent : program.getEvent())
+		{
+			switch (wEvent)
+			{
+				case VK_RIGHT:
+					position.x++;
+					break;
+
+				case VK_LEFT:
+					position.x--;
+					break;
+
+				case VK_UP:
+					position.y--;
+					break;
+
+				case VK_DOWN:
+					position.y++;
+					break;
+
+				case VK_ESCAPE:
+					break;
+			}
+		}
+
 		if (program.isError())
 			break;
 
@@ -352,17 +424,14 @@ int main()
 
 		// ==================== START ====================
 
-		program.writeString(0, 0, L"Test", COLOR::BG_CYAN | COLOR::FG_WHITE);
-
 		program.drawRect(position.x, position.y, rect, true);
-		position.x += 1;
 
-		program.drawTriangle(vertices[0], vertices[1], vertices[2], true);
-		vertices[0].y += direction.y;
-		vertices[1].y += direction.y;
-		vertices[2].y += direction.y;
+		//program.drawTriangle(vertices[0], vertices[1], vertices[2], true);
+		//vertices[0].y += direction.y;
+		//vertices[1].y += direction.y;
+		//vertices[2].y += direction.y;
 
-		program.drawCirlce(program.width() / 2, program.height() / 2, radius++, true, 0x2588, COLOR::FG_RED);
+		//program.drawCirlce(program.width() / 2, program.height() / 2, radius++, true, 0x2588, COLOR::FG_RED);
 		
 		// ===================== END =====================
 

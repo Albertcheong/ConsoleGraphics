@@ -15,7 +15,7 @@ class Graphics
 {
 	public:
 	Graphics() 
-		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_chBuffer(nullptr), m_chBufferBack(nullptr), m_rect{}
+		: m_nScreenWidth(NULL), m_nScreenHeight(NULL), m_backgroundColor(NULL), m_chBufferFront{}, m_chBufferBack{}, m_rect{}
 	{
 		m_sAppTitle  = L"Default";
 		m_hConsole   = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -23,11 +23,7 @@ class Graphics
 		m_bError     = false;
 	}
 
-	~Graphics() 
-	{
-		delete[] m_chBuffer;
-		delete[] m_chBufferBack;
-	}
+	~Graphics() {}
 
 	int setMode(int nWidth, int nHeight, int nFontWidth = 8, int nFontHeight = 8)
 	{
@@ -73,11 +69,8 @@ class Graphics
 		if (!SetConsoleWindowInfo(m_hConsole, TRUE, &m_rect))
 			return error(L"FAILED TO SET SCREEN SIZE");
 
-		m_chBuffer = new CHAR_INFO[m_nScreenWidth * m_nScreenHeight];
-		memset(m_chBuffer, NULL, sizeof(CHAR_INFO) * m_nScreenWidth * m_nScreenHeight);
-
-		m_chBufferBack = new CHAR_INFO[m_nScreenWidth * m_nScreenHeight];
-		memset(m_chBufferBack, NULL, sizeof(CHAR_INFO) * m_nScreenWidth * m_nScreenHeight);
+		m_chBufferFront.resize(m_nScreenWidth * m_nScreenHeight);
+		m_chBufferBack.resize(m_nScreenWidth * m_nScreenHeight);
 
 		return 1;
 	}
@@ -104,8 +97,7 @@ class Graphics
 
 		while (true)
 		{
-			if (!draw(x0, y0, wch, color))
-				continue;
+			draw(x0, y0, wch, color);
 
 			if (x0 == x1 && y0 == y1)
 				break;
@@ -185,16 +177,57 @@ class Graphics
 		return 1;
 	}
 
-	int drawCirlce()
+	int drawCirlce(int center_x, int center_y, int radius, bool bFill = false, wchar_t wch = 0x2588, short color = 0x000F)
 	{
+		int x = radius - 1;
+		int y = 0;
+		int dx = 1;
+		int dy = 1;
+		int err = dx - (radius << 1);
 
+		while (x >= y)
+		{
+			if (bFill)
+			{
+				drawLine(center_x - x, center_y + y, center_x + x, center_y + y, wch, color);
+				drawLine(center_x - x, center_y - y, center_x + x, center_y - y, wch, color);
+				drawLine(center_x - y, center_y + x, center_x + y, center_y + x, wch, color);
+				drawLine(center_x - y, center_y - x, center_x + y, center_y - x, wch, color);
+			}
+			else
+			{
+				draw(center_x + x, center_y + y, wch, color);
+				draw(center_x + y, center_y + x, wch, color);
+				draw(center_x - y, center_y + x, wch, color);
+				draw(center_x - x, center_y + y, wch, color);
+				draw(center_x - x, center_y - y, wch, color);
+				draw(center_x - y, center_y - x, wch, color);
+				draw(center_x + y, center_y - x, wch, color);
+				draw(center_x + x, center_y - y, wch, color);
+			}
+
+			if (err <= 0)
+			{
+				y++;
+				err += dy;
+				dy += 2;
+			}
+			if (err > 0)
+			{
+				x--;
+				dx += 2;
+				err += dx - (radius << 1);
+			}
+		}
+
+		return 1;
 	}
 
 	int writeString(int x, int y, const std::wstring& text, short color = 0x000F)
 	{
 		if (x >= 0 && x < m_nScreenWidth && y >= 0 && y < m_nScreenHeight)
 		{
-			for (std::size_t i = 0; i < text.size(); i++)
+			for (int i = 0; i < text.size(); i++)
 			{
 				m_chBufferBack[y * m_nScreenWidth + x + i].Char.UnicodeChar = text[i];
 				m_chBufferBack[y * m_nScreenWidth + x + i].Attributes = color;
@@ -205,34 +238,30 @@ class Graphics
 		return error(L"OUT OF BOUND");
 	}
 
-	int refresh() // implement later better refresh
-	{
-		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
-		{
-			m_chBuffer[i].Char.UnicodeChar = L' ';
-			m_chBuffer[i].Attributes = NULL;
-		}
-
-		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
-		{
-			m_chBufferBack[i].Char.UnicodeChar = L' ';
-			m_chBufferBack[i].Attributes = NULL;
-		}
-
-		return 1;
-	}
-
 	int update()
-	{
-		COORD bufferSize  = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
+	{ 
+		/*
+		compare each cell in the front buffer with the corresponding cell in the back buffer and if there's a difference
+		copy the data from the back buffer to the front buffer. This means that every time
+		update() is called, the front buffer is effectively updated to match the back buffer
+		*/
+
+		COORD bufferSize = { static_cast<short>(m_nScreenWidth), static_cast<short>(m_nScreenHeight) };
 		COORD bufferCoord = { 0, 0 };
 
-		CHAR_INFO* temp = m_chBuffer;
-		m_chBuffer = m_chBufferBack;
-		m_chBufferBack = temp;
-		
-		if (!WriteConsoleOutput(m_hConsole, m_chBuffer, bufferSize, bufferCoord, &m_rect))
+		for (int i = 0; i < m_nScreenWidth * m_nScreenHeight; i++)
+		{
+			if (m_chBufferFront[i].Char.UnicodeChar != m_chBufferBack[i].Char.UnicodeChar ||
+				m_chBufferFront[i].Attributes != m_chBufferBack[i].Attributes)
+			{
+				m_chBufferFront[i] = m_chBufferBack[i];
+			}
+		}
+
+		if (!WriteConsoleOutput(m_hConsole, m_chBufferFront.data(), bufferSize, bufferCoord, &m_rect))
 			return error(L"FAILED TO UPDATE BUFFER");
+
+		std::fill(m_chBufferBack.begin(), m_chBufferBack.end(), CHAR_INFO{ L' ', m_backgroundColor });
 
 		return 1;
 	}
@@ -240,6 +269,8 @@ class Graphics
 	int width() const { return m_nScreenWidth; }
 
 	int height() const { return m_nScreenHeight; }
+
+	void fillBackground(short color) { m_backgroundColor = color; }
 
 	bool isError() const { return m_bError; }
 
@@ -250,9 +281,8 @@ class Graphics
 		{
 			m_chBufferBack[y * m_nScreenWidth + x].Char.UnicodeChar = wch;
 			m_chBufferBack[y * m_nScreenWidth + x].Attributes = color;
-			return 1;
 		}
-		return 0;
+		return 1;
 	}
 
 	int error(const wchar_t* message)
@@ -281,13 +311,14 @@ class Graphics
 	HANDLE m_hConsoleIn;
 	SMALL_RECT m_rect;
 
+	std::vector<CHAR_INFO> m_chBufferFront;
+	std::vector<CHAR_INFO> m_chBufferBack;
+
 	bool m_bError;
 	int m_nScreenWidth;
 	int m_nScreenHeight;
 	std::wstring m_sAppTitle;
-
-	CHAR_INFO* m_chBuffer;
-	CHAR_INFO* m_chBufferBack;
+	USHORT m_backgroundColor;
 };
 
 int main()
@@ -296,14 +327,16 @@ int main()
 	program.setMode(80, 30);
 	program.setCaption(L"Test");
 
-	POINT position  = { 0, 0 };
+	POINT position  = { 0, 1 };
 	POINT direction = { 0, 1 };
 	RECT rect = { 0, 0, 5, 5 };
 
 	POINT vertices[3];
-	vertices[0] = { 0, 0 };
-	vertices[1] = { 0, 5 };
-	vertices[2] = { 5, 5 };
+	vertices[0] = { 0, 1 };
+	vertices[1] = { 0, 6 };
+	vertices[2] = { 5, 6 };
+
+	int radius = 0;
 
 	while (true)
 	{
@@ -315,19 +348,21 @@ int main()
 
 		// =============== DRAW BACKGROUND ===============
 
-		program.refresh(); // clear both buffers
-		// implement later background color
+		program.fillBackground(COLOR::BG_CYAN);
 
 		// ==================== START ====================
 
+		program.writeString(0, 0, L"Test", COLOR::BG_CYAN | COLOR::FG_WHITE);
+
 		program.drawRect(position.x, position.y, rect, true);
-		//position.x += direction.x;
-		//position.y += direction.y;
+		position.x += 1;
 
 		program.drawTriangle(vertices[0], vertices[1], vertices[2], true);
 		vertices[0].y += direction.y;
 		vertices[1].y += direction.y;
 		vertices[2].y += direction.y;
+
+		program.drawCirlce(program.width() / 2, program.height() / 2, radius++, true, 0x2588, COLOR::FG_RED);
 		
 		// ===================== END =====================
 

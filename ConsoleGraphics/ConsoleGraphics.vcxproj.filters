@@ -20,10 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Vector2.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Utils.hpp">
+    <ClInclude Include="Console2D.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
